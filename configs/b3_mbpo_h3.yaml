@@ -1,0 +1,3 @@
+# B3: fixed-horizon MBPO (+ Lagrangian), H=3 - no gate, no penalty
+base: model_base.yaml
+agent: {rollout: {horizon: 3}}

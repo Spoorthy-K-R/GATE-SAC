@@ -1,0 +1,11 @@
+# Shared by every model-based method: 4-member ensemble, rollouts every 250 env steps
+base: base.yaml
+sac: {gradient_steps: 10}
+agent:
+  lagrangian: true
+  use_model: true
+  n_members: 4
+  model_train_freq: 250
+  model_max_updates: 5000
+  real_ratio: 0.05
+  rollout: {horizon: 5, batch_size: 5000, gate: false, gate_percentile: 80, cost_aware_gate: false, penalty: 0.0, n_step: true}

@@ -1,0 +1,8 @@
+# Virtual environments & Conda
+.venv/
+venv/
+env/
+ENV/
+.conda/
+.vscode/
+older-version/

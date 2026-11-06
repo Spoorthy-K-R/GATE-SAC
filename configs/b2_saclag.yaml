@@ -1,0 +1,3 @@
+# B2: SAC-Lagrangian (model-free) - isolates the safety layer
+base: base.yaml
+agent: {lagrangian: true}

@@ -1,0 +1,3 @@
+base: ../../configs/g_gatesac.yaml
+agent: {warmup_updates: 500, bc_reg_anneal_updates: 2000, rollout: {batch_size: 2000}}
+train: {checkpoint_every: 1000, stdout: true, log_interval: 5}

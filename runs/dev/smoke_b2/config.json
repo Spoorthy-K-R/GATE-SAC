@@ -1,0 +1,44 @@
+{
+ "cfg": {
+  "env": {},
+  "sac": {
+   "learning_rate": 0.0003,
+   "buffer_size": 300000,
+   "batch_size": 256,
+   "gamma": 0.99,
+   "tau": 0.005,
+   "train_freq": 1,
+   "gradient_steps": 1,
+   "ent_coef": "auto"
+  },
+  "agent": {
+   "lagrangian": true,
+   "cost_budget": 1.0,
+   "lambda_init": 0.0,
+   "lambda_lr": 0.01,
+   "cost_window": 20,
+   "warmup_updates": 200,
+   "bc_reg": 1.0,
+   "bc_reg_anneal_updates": 50000,
+   "use_model": false
+  },
+  "train": {
+   "total_steps": 100000,
+   "failure_frac": 0.7,
+   "bc_init": true,
+   "seed_buffer_with_demos": true,
+   "checkpoint_every": 100000,
+   "log_interval": 1000,
+   "stdout": true
+  }
+ },
+ "args": {
+  "config": "runs/dev/smoke_b2.yaml",
+  "splits": "splits/nuscenes_sample.json",
+  "demos": "runs/dev/demos.npz",
+  "bc": "runs/dev/bc/actor.pt",
+  "seed": 0,
+  "out": "runs/dev/smoke_b2",
+  "total_steps": 1000
+ }
+}
