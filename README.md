@@ -199,3 +199,8 @@ Training writes both `progress.csv` and TensorBoard event files under `--out`:
 - **Gradient Updates vs. Env Steps:** `warmup_updates` (`5000`) and `bc_reg_anneal_updates` (`50000`) in `configs/base.yaml` count **gradient steps** (`_n_updates`), not environment steps. Because model-based configs set `gradient_steps: 10` while model-free configs set `gradient_steps: 1`, warm-up and BC annealing finish 10× earlier in environment steps for model-based runs unless scaled proportionally.
 - **Checkpoint Contents:** `.zip` checkpoints store the SB3 policy (actor + reward critics) and `cost_critic`, which is everything needed by `gate_sac.eval.evaluate`. They exclude `ensemble`, `lambda_c`, and `unc_ref`, so checkpoints are intended for evaluation rather than mid-run training resumption.
 - **Output Parent Directories:** When passing `--out path/to/result.json` to `gate_sac.eval.evaluate`, ensure `path/to/` already exists (`mkdir -p path/to`).
+
+
+
+## DEMOS FILE
+https://drive.google.com/drive/folders/1G71xcp3aTmtz-A04zoTVq24vtxfd-8AJ?usp=sharing
