@@ -12,12 +12,18 @@ import numpy as np
 
 class LogTrackingExpert:
 
-    def __init__(self, env, lookahead_steps=5, min_lookahead_m=4.0, wheelbase=2.8, speed_gain=0.25):
+    def __init__(self, env, lookahead_steps=5, min_lookahead_m=4.0, wheelbase=2.8, speed_gain=0.5,
+                 catchup_gain=0.5, max_catchup=3.0):
         self.env = env  # GateEnv or GateScenarioEnv
         self.lookahead_steps = lookahead_steps
         self.min_lookahead_m = min_lookahead_m
         self.wheelbase = wheelbase
-        self.speed_gain = speed_gain
+        self.speed_gain = speed_gain  # throttle per m/s of speed error
+        # Position feedback: +catchup_gain m/s of target speed per metre the car is behind (or ahead of)
+        # where the logged human was at this time step, clipped to +-max_catchup m/s. A pure speed
+        # P-controller lags the log, ends episodes short of the goal, and gets rear-ended by replayed cars.
+        self.catchup_gain = catchup_gain
+        self.max_catchup = max_catchup
 
     def _log(self):
         engine = self.env.unwrapped.engine
@@ -46,6 +52,10 @@ class LogTrackingExpert:
         max_steer = np.deg2rad(vehicle.config["max_steering"])
         steer = np.clip(steer_angle / max_steer, -1.0, 1.0)
 
-        target_speed = speeds[min(t + 1, len(speeds) - 1)]
+        # Along-path gap between where the human was at time t and where the car is now (> 0: behind).
+        arc = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(positions, axis=0), axis=-1))])
+        gap = arc[min(t, len(arc) - 1)] - arc[nearest]
+        catchup = np.clip(self.catchup_gain * gap, -self.max_catchup, self.max_catchup)
+        target_speed = max(speeds[min(t + 1, len(speeds) - 1)] + catchup, 0.0)
         throttle = np.clip(self.speed_gain * (target_speed - vehicle.speed), -1.0, 1.0)
         return np.array([steer, throttle], dtype=np.float32)
