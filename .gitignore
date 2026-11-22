@@ -13,7 +13,8 @@ __pycache__/
 .DS_Store
 waymo_sn8.zip
 
-# Keep large binary checkpoints & TensorBoard event files local (commit progress.csv, config.json, eval/*.json)
+# Keep 160 MB demos.npz, 3.7 GB intermediate 10k..100k checkpoints, TensorBoard events, and SLURM logs local
 runs/demos.npz
-runs/sweep/*/*.zip
+runs/sweep/*/model_*_steps.zip
 runs/sweep/*/events.out.tfevents.*
+logs/*.out

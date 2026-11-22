@@ -1,5 +1,5 @@
 {
- "data_dir": "/Users/kritikabansal/data/waymo_sn8",
+ "data_dir": "/scratch/user/spoorthy.kr/data/waymo_sn8",
  "n_total": 544,
  "dropped": [
   2,
