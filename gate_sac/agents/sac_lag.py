@@ -192,36 +192,40 @@ class SACLag(SAC):
             actions_pi, log_prob = self.actor.action_log_prob(b["obs"])
             log_prob = log_prob.reshape(-1, 1)
             if self.ent_coef_optimizer is not None:
-                ent_coef = th.exp(self.log_ent_coef.detach())
                 if not actor_frozen:
-                    ent_coef_loss = -(self.log_ent_coef * (log_prob + self.target_entropy).detach()).mean()
+                    ent_coef_loss = -(self.log_ent_coef * (log_prob.clamp(-20.0, 10.0) + self.target_entropy).detach()).mean()
                     self.ent_coef_optimizer.zero_grad()
                     ent_coef_loss.backward()
                     self.ent_coef_optimizer.step()
+                    self.log_ent_coef.data.clamp_(-10.0, 0.5)
+                ent_coef = th.exp(self.log_ent_coef.detach())
             else:
                 ent_coef = self.ent_coef_tensor
 
             with th.no_grad():
                 next_a, next_logp = self.actor.action_log_prob(b["boot_obs"])
+                next_logp = next_logp.reshape(-1, 1).clamp(-20.0, 10.0)
                 next_q = th.min(th.cat(self.critic_target(b["boot_obs"], next_a), 1), 1, keepdim=True)[0]
-                target_q = rew + disc * (next_q - ent_coef * next_logp.reshape(-1, 1))
+                target_q = rew + disc * (next_q - ent_coef * next_logp)
                 next_qc = th.max(th.cat(self.cost_critic_target(b["boot_obs"], next_a), 1), 1, keepdim=True)[0]
                 target_qc = cost + disc * next_qc
 
             critic_loss = 0.5 * sum(F.mse_loss(q, target_q) for q in self.critic(b["obs"], b["act"]))
             self.critic.optimizer.zero_grad()
             critic_loss.backward()
+            th.nn.utils.clip_grad_norm_(self.critic.parameters(), 10.0)
             self.critic.optimizer.step()
 
             cost_critic_loss = 0.5 * sum(F.mse_loss(q, target_qc) for q in self.cost_critic(b["obs"], b["act"]))
             self.cost_critic.optimizer.zero_grad()
             cost_critic_loss.backward()
+            th.nn.utils.clip_grad_norm_(self.cost_critic.parameters(), 10.0)
             self.cost_critic.optimizer.step()
 
             if not actor_frozen:
                 q_pi = th.min(th.cat(self.critic(b["obs"], actions_pi), 1), 1, keepdim=True)[0]
                 qc_pi = th.max(th.cat(self.cost_critic(b["obs"], actions_pi), 1), 1, keepdim=True)[0]
-                actor_loss = (ent_coef * log_prob - q_pi + self.lambda_c * qc_pi).mean()
+                actor_loss = (ent_coef * log_prob.clamp(-20.0, 10.0) - q_pi + self.lambda_c * qc_pi).mean()
                 beta = self._bc_beta()
                 if beta > 0 and self.bc_actor is not None:
                     with th.no_grad():
@@ -231,6 +235,7 @@ class SACLag(SAC):
                     logs["bc_loss"].append(bc_loss.item())
                 self.actor.optimizer.zero_grad()
                 actor_loss.backward()
+                th.nn.utils.clip_grad_norm_(self.actor.parameters(), 10.0)
                 self.actor.optimizer.step()
                 logs["actor_loss"].append(actor_loss.item())
                 logs["q"].append(q_pi.mean().item())

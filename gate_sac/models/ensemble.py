@@ -44,13 +44,14 @@ class Ensemble(nn.Module):
         self.out_mu, self.out_std = y.mean(0), y.std(0).clamp_min(1e-6)
 
     def _forward(self, x):  # x normalized, [E, N, d]
-        h = x
+        h = x.clamp(-20.0, 20.0)
         for layer in self.layers:
             h = F.silu(layer(h))
         out = self.head(h)
         mu, logvar = out[..., :self.n_gauss], out[..., self.n_gauss:2 * self.n_gauss]
+        min_lv = torch.minimum(self.min_logvar, self.max_logvar - 0.1)
         logvar = self.max_logvar - F.softplus(self.max_logvar - logvar)
-        logvar = self.min_logvar + F.softplus(logvar - self.min_logvar)
+        logvar = min_lv + F.softplus(logvar - min_lv)
         return mu, logvar, out[..., -2], out[..., -1]
 
     def _inputs(self, obs, act):
@@ -85,8 +86,11 @@ class Ensemble(nn.Module):
                 bce = F.binary_cross_entropy_with_logits(cost_logit, cost[idx], pos_weight=cost_pw) + \
                     F.binary_cross_entropy_with_logits(done_logit, done[idx], pos_weight=done_pw)
                 loss = nll + bce + 0.01 * (self.max_logvar.sum() - self.min_logvar.sum())
+                if not torch.isfinite(loss):
+                    continue
                 optimizer.zero_grad()
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.parameters(), 10.0)
                 optimizer.step()
                 updates += 1
             hold_mse = self._holdout_mse(xn[hold], yn[hold]) if n_hold else 0.0
@@ -122,5 +126,7 @@ class Ensemble(nn.Module):
         if sample:
             y = y + torch.randn_like(y) * torch.exp(0.5 * logvar[member, rows])
         y = y * self.out_std + self.out_mu
-        next_obs = (obs + y[:, :self.obs_dim]).clamp(0.0, 1.0)
-        return next_obs, y[:, -1], torch.sigmoid(cost_logit).mean(0), torch.sigmoid(done_logit).mean(0), u
+        next_obs = torch.nan_to_num(obs + y[:, :self.obs_dim], nan=0.0, posinf=1.0, neginf=0.0).clamp(0.0, 1.0)
+        rew = torch.nan_to_num(y[:, -1], nan=0.0, posinf=10.0, neginf=-5.0).clamp(-5.0, 10.0)
+        u = torch.nan_to_num(u, nan=0.0, posinf=1e3, neginf=0.0).clamp(0.0, 1e3)
+        return next_obs, rew, torch.sigmoid(cost_logit).mean(0), torch.sigmoid(done_logit).mean(0), u

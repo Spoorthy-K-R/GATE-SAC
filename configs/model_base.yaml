@@ -3,6 +3,8 @@ base: base.yaml
 sac: {gradient_steps: 10}
 agent:
   lagrangian: true
+  warmup_updates: 50000          # 5,000 env steps at gradient_steps=10 (matches model-free warmup in env steps)
+  bc_reg_anneal_updates: 500000  # 50,000 env steps at gradient_steps=10 (matches model-free BC anneal in env steps)
   use_model: true
   n_members: 4
   model_train_freq: 250

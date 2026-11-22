@@ -72,7 +72,8 @@ def main():
     np.random.seed(a.seed)
     splits = load_splits(a.splits)
     env = GateEnv(splits["data_dir"], seed=a.seed, env_config=cfg.get("env"))
-    env.set_scenarios(*training_scenarios(splits, tr["failure_frac"]))
+    scenarios, probs = training_scenarios(splits, tr["failure_frac"])
+    env.set_scenarios(scenarios, sequential=False, probs=probs)
 
     agent_cfg = dict(cfg["agent"])
     if tr.get("bc_init", True):

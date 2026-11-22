@@ -6,3 +6,9 @@ ENV/
 .conda/
 .vscode/
 older-version/
+
+# Python bytecode & OS metadata
+__pycache__/
+*.py[cod]
+.DS_Store
+waymo_sn8.zip
