@@ -12,3 +12,8 @@ __pycache__/
 *.py[cod]
 .DS_Store
 waymo_sn8.zip
+
+# Keep large binary checkpoints & TensorBoard event files local (commit progress.csv, config.json, eval/*.json)
+runs/demos.npz
+runs/sweep/*/*.zip
+runs/sweep/*/events.out.tfevents.*
