@@ -1,3 +1,3 @@
-# G: GATE-SAC - uncertainty gate + MOPO penalty + Lagrangian cost critic, BC init
+# G: GATE-SAC - cost-aware uncertainty gate + MOPO penalty + Lagrangian cost critic, BC init
 base: model_base.yaml
-agent: {rollout: {gate: true, penalty: 0.5}}
+agent: {rollout: {gate: true, cost_aware_gate: true, penalty: 0.1}}

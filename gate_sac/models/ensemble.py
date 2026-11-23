@@ -71,9 +71,10 @@ class Ensemble(nn.Module):
         hold, train = perm[:n_hold], perm[n_hold:]
         self._set_norm(x[train], y[train])
         xn, yn = (x - self.in_mu) / self.in_std, (y - self.out_mu) / self.out_std
-        # Rare events (crash / out-of-road) get up-weighted in the BCE losses.
-        pos_w = lambda t: ((1 - t[train]).sum() / t[train].sum().clamp_min(1)).clamp(1, 100)
-        cost_pw, done_pw = pos_w(cost), pos_w(done)
+        # Moderate up-weight for rare crash costs (used by cost_aware_gate); keep done unweighted
+        # so termination probabilities remain calibrated instead of over-terminating rollouts.
+        pos_w = lambda t, cap: ((1 - t[train]).sum() / t[train].sum().clamp_min(1)).clamp(1.0, cap)
+        cost_pw = pos_w(cost, 10.0)
 
         boot = train[torch.randint(len(train), (self.n_members, len(train)), device=device)]
         best, best_state, bad, updates = np.inf, None, 0, 0
@@ -84,7 +85,7 @@ class Ensemble(nn.Module):
                 mu, logvar, cost_logit, done_logit = self._forward(xn[idx])
                 nll = (((mu - yn[idx]) ** 2) * torch.exp(-logvar) + logvar).mean()
                 bce = F.binary_cross_entropy_with_logits(cost_logit, cost[idx], pos_weight=cost_pw) + \
-                    F.binary_cross_entropy_with_logits(done_logit, done[idx], pos_weight=done_pw)
+                    F.binary_cross_entropy_with_logits(done_logit, done[idx])
                 loss = nll + bce + 0.01 * (self.max_logvar.sum() - self.min_logvar.sum())
                 if not torch.isfinite(loss):
                     continue

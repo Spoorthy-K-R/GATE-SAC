@@ -3,13 +3,12 @@
 Subclasses SB3's SAC and overrides `train()`; SB3 still provides the actor, twin critics, entropy
 tuning, environment loop, logging and checkpointing. Added on top:
 
-* cost critic Q_c (twin, pessimistic max) trained on the cost signal c
+* cost critic Q_c (twin, pessimistic max) trained strictly on real transitions
 * Lagrange multiplier lambda_c, updated by dual ascent on *real* collisions-per-km vs a budget
 * actor loss  alpha*log pi - min Q + lambda_c * Q_c + beta * ||pi(s) - pi_BC(s)||^2  (beta annealed)
 * BC warm start: actor initialized from BC and frozen for `warmup_updates` while critics learn
-* optional world-model ensemble + imagined rollouts (gate / penalty / fixed-H), mixed into every
-  batch at `real_ratio` real : (1 - real_ratio) imagined; real data uses 1-step targets,
-  imagined data n-step targets.
+* optional world-model ensemble + imagined rollouts (gate / penalty / fixed-H), mixed into
+  reward-critic and actor batches at `real_ratio` real : (1 - real_ratio) imagined.
 """
 from collections import deque
 
@@ -78,8 +77,9 @@ class SACLag(SAC):
         use_model=False,
         n_members=4,
         model_train_freq=250,
+        model_init_updates=20000,
         model_max_updates=5000,
-        real_ratio=0.05,
+        real_ratio=0.5,
         rollout=None,
         **kwargs,
     ):
@@ -89,7 +89,8 @@ class SACLag(SAC):
         self.bc_actor_path, self.warmup_updates = bc_actor_path, warmup_updates
         self.bc_reg, self.bc_reg_anneal_updates = bc_reg, bc_reg_anneal_updates
         self.use_model, self.n_members = use_model, n_members
-        self.model_train_freq, self.model_max_updates, self.real_ratio = model_train_freq, model_max_updates, real_ratio
+        self.model_train_freq, self.model_init_updates = model_train_freq, model_init_updates
+        self.model_max_updates, self.real_ratio = model_max_updates, real_ratio
         self.rollout_cfg = RolloutConfig(**(rollout or {}))
         super().__init__(policy, env, **kwargs)
 
@@ -156,7 +157,8 @@ class SACLag(SAC):
     # ------------------------------------------------------------ world model
     def _refresh_imagination(self):
         data = self.replay_buffer.all_data(self.device)
-        fit = self.ensemble.fit(data, self.ensemble_opt, max_updates=self.model_max_updates)
+        max_up = self.model_init_updates if self._last_model_step < 0 else self.model_max_updates
+        fit = self.ensemble.fit(data, self.ensemble_opt, max_updates=max_up)
         n = len(data["obs"])
         start = data["obs"][th.randint(n, (self.rollout_cfg.batch_size,), device=self.device)]
         self.imagined, stats = imagine(self.ensemble, self.actor, start, self.rollout_cfg, self.unc_ref, self.gamma)
@@ -186,7 +188,11 @@ class SACLag(SAC):
         logs = {k: [] for k in ["critic_loss", "cost_critic_loss", "actor_loss", "ent_coef", "q", "qc", "bc_loss"]}
         for _ in range(gradient_steps):
             b = self._sample_batch(batch_size)
-            rew, cost, disc = b["rew"][:, None], b["cost"][:, None], b["disc"][:, None]
+            rew, disc = b["rew"][:, None], b["disc"][:, None]
+            # Ground cost critic strictly in real transitions to avoid imagined crash overestimation.
+            real_b = b if (self.imagined is None or len(self.imagined["obs"]) == 0) else \
+                self.replay_buffer.sample_lag(batch_size, self.gamma, self.device)
+            r_cost, r_disc = real_b["cost"][:, None], real_b["disc"][:, None]
             actor_frozen = self._n_updates < self.warmup_updates
 
             actions_pi, log_prob = self.actor.action_log_prob(b["obs"])
@@ -207,8 +213,9 @@ class SACLag(SAC):
                 next_logp = next_logp.reshape(-1, 1).clamp(-20.0, 10.0)
                 next_q = th.min(th.cat(self.critic_target(b["boot_obs"], next_a), 1), 1, keepdim=True)[0]
                 target_q = rew + disc * (next_q - ent_coef * next_logp)
-                next_qc = th.max(th.cat(self.cost_critic_target(b["boot_obs"], next_a), 1), 1, keepdim=True)[0]
-                target_qc = cost + disc * next_qc
+                real_next_a, _ = self.actor.action_log_prob(real_b["boot_obs"])
+                next_qc = th.max(th.cat(self.cost_critic_target(real_b["boot_obs"], real_next_a), 1), 1, keepdim=True)[0]
+                target_qc = r_cost + r_disc * next_qc
 
             critic_loss = 0.5 * sum(F.mse_loss(q, target_q) for q in self.critic(b["obs"], b["act"]))
             self.critic.optimizer.zero_grad()
@@ -216,7 +223,7 @@ class SACLag(SAC):
             th.nn.utils.clip_grad_norm_(self.critic.parameters(), 10.0)
             self.critic.optimizer.step()
 
-            cost_critic_loss = 0.5 * sum(F.mse_loss(q, target_qc) for q in self.cost_critic(b["obs"], b["act"]))
+            cost_critic_loss = 0.5 * sum(F.mse_loss(q, target_qc) for q in self.cost_critic(real_b["obs"], real_b["act"]))
             self.cost_critic.optimizer.zero_grad()
             cost_critic_loss.backward()
             th.nn.utils.clip_grad_norm_(self.cost_critic.parameters(), 10.0)

@@ -10,11 +10,11 @@ One function covers every model-based method in the experiment matrix:
 Uncertainty is made unit-free with reference statistics of the *one-step* disagreement on real
 start states (EMA over rounds):  u_norm = u / median_ref.  The gate truncates a rollout as soon as
 u_norm exceeds the running p-th percentile of that reference: an adaptive threshold instead of a
-hand-tuned constant. The penalty is r_tilde = r - lambda * u_norm.
+hand-tuned constant. The MOPO penalty r_tilde = r - lambda * u_norm is floored at +0.05 on positive
+rewards so uncertainty penalization cannot flip driving rewards negative in zero-terminal-penalty tasks.
 
-Rollouts are converted to n-step targets (Dreamer-SAC eq. 20): each kept transition carries the
-discounted reward/cost sum to the end of its (possibly truncated) rollout, the bootstrap state and
-the bootstrap discount gamma^N * (1 - done).
+By default (`n_step=False`), kept imagined transitions are stored as standard 1-step MBPO transitions;
+setting `n_step=True` builds Dreamer-SAC multi-step discounted targets over each surviving rollout.
 """
 from dataclasses import dataclass
 
@@ -29,7 +29,7 @@ class RolloutConfig:
     gate_percentile: float = 80.0
     cost_aware_gate: bool = False  # keep predicted crashes even if uncertain (ablation)
     penalty: float = 0.0  # lambda in r - lambda * u_norm
-    n_step: bool = True
+    n_step: bool = False
     ref_ema: float = 0.9
 
 
@@ -41,8 +41,8 @@ class UncertaintyReference:
         self.median = self.threshold = None
 
     def update(self, u_first):
-        med = u_first.median().item()
-        thr = torch.quantile(u_first, self.q).item() / max(med, 1e-12)
+        med = max(u_first.median().item(), 1e-12)
+        thr = torch.quantile(u_first, self.q).item() / med
         if self.median is None:
             self.median, self.threshold = med, thr
         else:
@@ -69,7 +69,11 @@ def imagine(ensemble, actor, start_obs, cfg: RolloutConfig, ref: UncertaintyRefe
                 uncertain &= cost_p < 0.5
             keep &= ~uncertain
         done = (done_p > 0.5) | (cfg.cost_aware_gate & (cost_p >= 0.5))
-        for key, val in zip(steps, [obs, act, rew - cfg.penalty * u_norm, cost_p, next_obs, done.float(), keep, u_norm]):
+        # Keep positive driving step rewards > 0 so MOPO pessimism never makes crashing (r=0) optimal.
+        rew_pen = rew - cfg.penalty * u_norm
+        if cfg.penalty > 0:
+            rew_pen = torch.where(rew > 0, rew_pen.clamp_min(0.05), rew_pen.clamp_min(-1.0))
+        for key, val in zip(steps, [obs, act, rew_pen, cost_p, next_obs, done.float(), keep, u_norm]):
             steps[key].append(val)
         alive = keep & ~done
         obs = next_obs

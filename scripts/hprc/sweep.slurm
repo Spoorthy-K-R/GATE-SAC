@@ -2,9 +2,9 @@
 #SBATCH --job-name=gatesac
 #SBATCH --account=132702223356        # Grace: 132702223356 | FASTER: 142702220759
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:a100:1
 #SBATCH --array=0-44
-#SBATCH --time=06:00:00
+#SBATCH --time=04:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=24G

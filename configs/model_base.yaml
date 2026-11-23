@@ -1,13 +1,14 @@
 # Shared by every model-based method: 4-member ensemble, rollouts every 250 env steps
 base: base.yaml
-sac: {gradient_steps: 10}
+sac: {gradient_steps: 2}
 agent:
   lagrangian: true
-  warmup_updates: 50000          # 5,000 env steps at gradient_steps=10 (matches model-free warmup in env steps)
-  bc_reg_anneal_updates: 500000  # 50,000 env steps at gradient_steps=10 (matches model-free BC anneal in env steps)
+  warmup_updates: 10000          # 5,000 env steps at gradient_steps=2 (matches model-free warmup in env steps)
+  bc_reg_anneal_updates: 100000  # 50,000 env steps at gradient_steps=2 (matches model-free BC anneal in env steps)
   use_model: true
   n_members: 4
   model_train_freq: 250
+  model_init_updates: 20000
   model_max_updates: 5000
-  real_ratio: 0.05
-  rollout: {horizon: 5, batch_size: 5000, gate: false, gate_percentile: 80, cost_aware_gate: false, penalty: 0.0, n_step: true}
+  real_ratio: 0.5
+  rollout: {horizon: 5, batch_size: 5000, gate: false, gate_percentile: 80, cost_aware_gate: false, penalty: 0.0, n_step: false}
