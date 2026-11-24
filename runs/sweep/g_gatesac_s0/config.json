@@ -3,13 +3,13 @@
   "env": {},
   "sac": {
    "learning_rate": 0.0003,
-   "buffer_size": 300000,
+   "buffer_size": 450000,
    "batch_size": 256,
    "gamma": 0.99,
    "tau": 0.005,
    "train_freq": 1,
-   "gradient_steps": 10,
-   "ent_coef": "auto"
+   "gradient_steps": 2,
+   "ent_coef": "auto_0.05"
   },
   "agent": {
    "lagrangian": true,
@@ -17,22 +17,23 @@
    "lambda_init": 0.0,
    "lambda_lr": 0.01,
    "cost_window": 20,
-   "warmup_updates": 50000,
+   "warmup_updates": 10000,
    "bc_reg": 1.0,
-   "bc_reg_anneal_updates": 500000,
+   "bc_reg_anneal_updates": 100000,
    "use_model": true,
    "n_members": 4,
    "model_train_freq": 250,
+   "model_init_updates": 20000,
    "model_max_updates": 5000,
-   "real_ratio": 0.05,
+   "real_ratio": 0.5,
    "rollout": {
     "horizon": 5,
     "batch_size": 5000,
     "gate": true,
     "gate_percentile": 80,
-    "cost_aware_gate": false,
-    "penalty": 0.5,
-    "n_step": true
+    "cost_aware_gate": true,
+    "penalty": 0.1,
+    "n_step": false
    }
   },
   "train": {
